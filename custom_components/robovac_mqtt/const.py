@@ -68,7 +68,7 @@ EUFY_API_DEVICE_LIST_HOME: Final = f"{EUFY_HOME_API_BASE_URL}/v1/device/"
 # productIds are confirmed from real devices; do NOT assume every localKey-
 # bearing device is an S1 Pro (see EufyLogin._resolve_tuya_model, issue #131).
 TUYA_PRODUCT_MODELS: Final[dict[str, str]] = {
-    # "<tuya_product_id>": "T2080A",   # S1 Pro — fill in from a confirmed device
+    "k8ttkrhlqtnfd8e9": "T2080A",  # S1 Pro (T2080 / 扫地机-IPC) confirmed from device logs
 }
 EUFY_API_MQTT_INFO: Final = (
     f"{EUFY_AIOT_API_BASE_URL}/app/devicemanage/get_user_mqtt_info"
