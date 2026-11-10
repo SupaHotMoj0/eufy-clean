@@ -1,0 +1,61 @@
+name: Weekly scan of public forks
+
+on:
+  schedule:
+    # Every Monday at 06:30 UTC (slightly offset)
+    - cron: "30 6 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Ensure review-queue exists
+        run: |
+          git fetch origin review-queue || true
+          if ! git show-ref --verify --quiet refs/remotes/origin/review-queue; then
+            git checkout -b review-queue
+            git push origin review-queue
+          fi
+
+      - name: Scan recent public forks
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          UPSTREAM: jeppesens/eufy-clean
+          REVIEW_BRANCH: review-queue
+        run: |
+          set -euo pipefail
+          forks=$(gh api "repos/$UPSTREAM/forks?sort=pushed&per_page=30" --jq '.[].full_name')
+
+          echo "$forks" | while IFS= read -r fork; do
+            [ -z "$fork" ] && continue
+            default_branch=$(gh api "repos/$fork" --jq .default_branch 2>/dev/null || echo "main")
+
+            import_branch="import/fork-$(echo "$fork" | tr '/' '-')"
+            existing=$(gh pr list --head "$import_branch" --base "$REVIEW_BRANCH" --state open --json number --jq '.[0].number // empty')
+            [ -n "$existing" ] && continue
+
+            git fetch origin "$REVIEW_BRANCH"
+            git checkout -B "$import_branch" "origin/$REVIEW_BRANCH"
+
+            if git fetch "https://github.com/$fork.git" "$default_branch":"fork-tmp" 2>/dev/null; then
+              if ! git diff --quiet HEAD fork-tmp; then
+                if git merge --no-ff fork-tmp -m "Import recent changes from $fork" --allow-unrelated-histories; then
+                  git push origin "$import_branch"
+                  gh pr create --base "$REVIEW_BRANCH" --head "$import_branch" \
+                    --title "Import changes from fork $fork" \
+                    --body "Automatically proposed from public fork.\n\nSource: https://github.com/$fork\n\n**Review carefully** before merging into \`$REVIEW_BRANCH\`. Does not touch main." \
+                    --draft
+                fi
+              fi
+            fi
+          done
