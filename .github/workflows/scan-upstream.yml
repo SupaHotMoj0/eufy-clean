@@ -1,0 +1,63 @@
+name: Weekly scan of upstream PRs
+
+on:
+  schedule:
+    # Every Monday at 06:00 UTC
+    - cron: "0 6 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Ensure review-queue exists
+        run: |
+          git fetch origin review-queue || true
+          if ! git show-ref --verify --quiet refs/remotes/origin/review-queue; then
+            git checkout -b review-queue
+            git push origin review-queue
+          fi
+
+      - name: Scan upstream open PRs
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          UPSTREAM: jeppesens/eufy-clean
+          REVIEW_BRANCH: review-queue
+        run: |
+          set -euo pipefail
+          prs=$(gh pr list --repo "$UPSTREAM" --state open --limit 30 --json number,title,url,headRefName,headRepositoryOwner --jq '.[] | select(.title | test("(?i)(fix|model|tuya|product|map|boost|support|add)"))')
+
+          echo "$prs" | while IFS= read -r pr; do
+            [ -z "$pr" ] && continue
+            number=$(echo "$pr" | jq -r .number)
+            title=$(echo "$pr" | jq -r .title)
+            url=$(echo "$pr" | jq -r .url)
+            branch=$(echo "$pr" | jq -r .headRefName)
+            owner=$(echo "$pr" | jq -r .headRepositoryOwner.login)
+
+            import_branch="import/upstream-pr-${number}"
+            existing=$(gh pr list --head "$import_branch" --base "$REVIEW_BRANCH" --state open --json number --jq '.[0].number // empty')
+            [ -n "$existing" ] && continue
+
+            git fetch origin "$REVIEW_BRANCH"
+            git checkout -B "$import_branch" "origin/$REVIEW_BRANCH"
+
+            if git fetch "https://github.com/${owner}/eufy-clean.git" "$branch":"pr-$number" 2>/dev/null; then
+              if git merge --no-ff "pr-$number" -m "Import upstream PR #$number: $title" --allow-unrelated-histories; then
+                git push origin "$import_branch"
+                gh pr create --base "$REVIEW_BRANCH" --head "$import_branch" \
+                  --title "Import upstream PR #$number: $title" \
+                  --body "Proposed from upstream PR.\n\nSource: $url\n\n**Review carefully** before merging into \`$REVIEW_BRANCH\`. Does not touch main." \
+                  --draft
+              fi
+            fi
+          done
