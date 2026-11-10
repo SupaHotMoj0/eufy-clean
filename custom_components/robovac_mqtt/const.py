@@ -68,7 +68,7 @@ EUFY_API_DEVICE_LIST_HOME: Final = f"{EUFY_HOME_API_BASE_URL}/v1/device/"
 # productIds are confirmed from real devices; do NOT assume every localKey-
 # bearing device is an S1 Pro (see EufyLogin._resolve_tuya_model, issue #131).
 TUYA_PRODUCT_MODELS: Final[dict[str, str]] = {
-    # "<tuya_product_id>": "T2080A",   # S1 Pro — fill in from a confirmed device
+    "k8ttkrhlqtnfd8e9": "T2080A",  # Eufy S1 Pro, confirmed in Eufy app
 }
 EUFY_API_MQTT_INFO: Final = (
     f"{EUFY_AIOT_API_BASE_URL}/app/devicemanage/get_user_mqtt_info"
@@ -314,7 +314,6 @@ class EUFY_CLEAN_CONTROL(int, Enum):
     START_GLOBAL_CRUISE = 20
     START_POINT_CRUISE = 21
     START_ZONES_CRUISE = 22
-    START_SCHEDULE_CRUISE = 23
     START_SCENE_CLEAN = 24
     START_MAPPING_THEN_CLEAN = 25
 
@@ -844,3 +843,4 @@ TUYA_REGIONS = {
     "EU": "https://a1.tuyaeu.com/api.json",
     "US": "https://a1.tuyaus.com/api.json",
 }
+
